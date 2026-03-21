@@ -129,6 +129,9 @@ static bool rel_perform(kbelf_reloc reloc, kbelf_file file, kbelf_inst inst, siz
 
 // Perform all relocations from a RELA table.
 static bool rela_perform(kbelf_reloc reloc, kbelf_file file, kbelf_inst inst, size_t relatab_len, kbelf_laddr relatab) {
+#ifdef KBELF_CONTINUE_ON_MISSING_SYMBOLS
+    bool had_errors = false;
+#endif
     for (size_t i = 0; i < relatab_len; i++) {
         kbelf_relaentry ent = {0};
         if (!kbelfx_copy_from_user(inst, &ent, relatab + i * sizeof(kbelf_relaentry), sizeof(kbelf_relaentry)))
@@ -161,7 +164,13 @@ static bool rela_perform(kbelf_reloc reloc, kbelf_file file, kbelf_inst inst, si
                 if (bind == 2) { // STB_WEAK
                     symval = 0;
                 } else {
+#ifdef KBELF_CONTINUE_ON_MISSING_SYMBOLS
+                    KBELF_LOGE("Missing symbol: " KBELF_FMT_CSTR, symname);
+                    symval = 0;
+                    had_errors = true;
+#else
                     KBELF_ERROR(abort, "Unable to find symbol " KBELF_FMT_CSTR, symname)
+#endif
                 }
             }
             kbelfx_free(symname);
@@ -178,7 +187,11 @@ static bool rela_perform(kbelf_reloc reloc, kbelf_file file, kbelf_inst inst, si
         if (!success)
             KBELF_ERROR(abort, "Applying relocation 0x" KBELF_FMT_BYTE " failed", type)
     }
+#ifdef KBELF_CONTINUE_ON_MISSING_SYMBOLS
+    return !had_errors;
+#else
     return true;
+#endif
 
 abort:
     return false;
