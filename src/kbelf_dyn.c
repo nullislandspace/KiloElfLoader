@@ -395,6 +395,21 @@ bool kbelf_dyn_load(kbelf_dyn dyn) {
         if (!kbelf_reloc_add(reloc, dyn->libs_file[i], dyn->libs_inst[i]))
             KBELF_ERROR(abort, "Out of memory")
     }
+    // Synchronize caches BEFORE relocating. Relocation parses the dynamic,
+    // hash, symbol and relocation tables straight out of the freshly loaded
+    // segments, so the loader must see the real contents of memory at this
+    // point -- not whatever the CPU happens to have cached for that range.
+    for (size_t i = 0; i < dyn->exec_inst->segments_len; i++) {
+        kbelf_segment *seg = &dyn->exec_inst->segments[i];
+        kbelfx_cache_sync(seg->laddr, seg->size);
+    }
+    for (size_t i = 0; i < dyn->libs_len; i++) {
+        for (size_t j = 0; j < dyn->libs_inst[i]->segments_len; j++) {
+            kbelf_segment *seg = &dyn->libs_inst[i]->segments[j];
+            kbelfx_cache_sync(seg->laddr, seg->size);
+        }
+    }
+
     if (!kbelf_reloc_perform(reloc))
         KBELF_ERROR(abort, "Relocation failed")
     kbelf_reloc_destroy(reloc);
